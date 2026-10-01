@@ -1,0 +1,19 @@
+USE KU_Sports;
+GO
+CREATE OR ALTER FUNCTION dbo.fn_IsStudentEligible(@StudentID VARCHAR(10)) RETURNS BIT
+AS BEGIN
+ DECLARE @Eligible BIT=0;
+ IF EXISTS(SELECT 1 FROM dbo.STUDENTS WHERE StudentID=@StudentID AND IsActive=1) SET @Eligible=1;
+ RETURN @Eligible;
+END;
+GO
+CREATE OR ALTER FUNCTION dbo.fn_IsCourtAvailable(@CourtID INT,@BookingDate DATE,@SlotID INT) RETURNS BIT
+AS BEGIN
+ DECLARE @Available BIT=0;
+ IF EXISTS(SELECT 1 FROM dbo.COURTS WHERE CourtID=@CourtID AND CourtStatus='ACTIVE')
+ AND EXISTS(SELECT 1 FROM dbo.TIME_SLOTS WHERE SlotID=@SlotID AND IsActive=1)
+ AND EXISTS(SELECT 1 FROM dbo.FACILITY_SCHEDULE WHERE ScheduleDate=@BookingDate AND IsCourtOpen=1 AND NULLIF(LTRIM(RTRIM(ActivityName)),'') IS NULL)
+ AND NOT EXISTS(SELECT 1 FROM dbo.BOOKINGS WHERE CourtID=@CourtID AND BookingDate=@BookingDate AND SlotID=@SlotID AND Status='BOOKED') SET @Available=1;
+ RETURN @Available;
+END;
+GO

@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+.env
+.env.*
+!.env.example
+**/appsettings.Local.json
+**/.local/
+test-results/
+playwright-report/
+docs/DemoCredentials.local.md
+backend/wwwroot/
+work/

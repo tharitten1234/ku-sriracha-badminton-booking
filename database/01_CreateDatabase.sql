@@ -1,0 +1,6 @@
+USE master;
+GO
+IF DB_ID(N'KU_Sports') IS NULL CREATE DATABASE KU_Sports COLLATE Thai_100_CI_AS;
+GO
+USE KU_Sports;
+GO

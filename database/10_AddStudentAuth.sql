@@ -1,0 +1,5 @@
+USE KU_Sports;
+GO
+IF COL_LENGTH('dbo.STUDENTS','PasswordHash') IS NULL
+ ALTER TABLE dbo.STUDENTS ADD PasswordHash VARCHAR(255) NULL;
+GO
