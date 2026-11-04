@@ -54,8 +54,8 @@ UI รองรับ 390px และ desktop หากต้องการเ�
 - หน้าแรกแสดงสถานะของวันนี้ ส่วนการจองรองรับวันนี้ถึง 30 วันล่วงหน้า โดยวันที่และขอบเขตวันอิง **Asia/Bangkok** ผ่าน `AT TIME ZONE 'SE Asia Standard Time'`.
 - ไม่มี Facility Schedule = CLOSED; ไม่มีการ seed วันเปิดหรือกิจกรรมตัวอย่าง ให้ Admin เพิ่มตารางจริงก่อนเปิดจอง มี ActivityName = CLOSED, คอร์ดซ่อมบำรุง = CLOSED
 - Tip เป็นรายการจำลอง `PROMPTPAY_DEMO` ไม่มีการชำระเงินจริง และยังอยู่ในรายงานแม้ภายหลังยกเลิกการจอง
-- หน้าประวัติตรวจรหัสคู่เดิมก่อนดูรายการ ยกเลิกได้เฉพาะรายการที่มีนิสิตใน session หรือแอดมิน
-- การตรวจ student ID เป็น **ตัวแทนสิทธิ์สำหรับเดโม** ไม่ใช่การพิสูจน์ตัวตนจริง ผู้รู้รหัสนิสิตสามารถเข้า session เดโมได้ ไม่มี KU/Nontri integration
+- หน้าประวัติแสดงเฉพาะรายการที่มีนิสิตใน session ยกเลิกได้เฉพาะผู้เล่นในรายการหรือแอดมิน
+- บัญชีนิสิตเข้าสู่ระบบด้วยรหัสผ่าน แต่การสมัครตรวจเพียงรูปแบบ Student ID ไม่ยืนยันเจ้าของรหัสกับ KU/Nontri
 - สมัคร/เข้าสู่ระบบด้วย Student ID 10 หลักและ password hash PBKDF2 ไม่มีขั้นอนุมัติ ผู้จองหลักมาจาก session เท่านั้น ผู้จองลำดับสองต้องมีบัญชี active แล้ว
 - Login แอดมินจำกัดคำขอต่อ IP, cookie HttpOnly/SameSite Strict, ตรวจ Origin ของ write requests, ใช้ SQL parameters ทุก query
 - ปุ่มแอดมิน “เปิดสนามวันนี้” / “ปิดสนามวันนี้ / Event” เปลี่ยน Facility Schedule ของวันนี้จริงโดยไม่เปลี่ยน OS date ไม่ยกเลิกรายการเดิมอัตโนมัติ
@@ -96,6 +96,7 @@ SQL programming mapping อยู่ใน `docs/DatabaseProgrammingMapping.md` 
 
 ## ข้อจำกัดเดโม
 
-ไม่มี payment gateway / KU SSO / แจ้งเตือน การสมัครตรวจรูปแบบรหัส 10 หลักและสร้างบัญชีทันที แต่ไม่ยืนยันตัวตนกับทะเบียน KU รหัสคู่จองต้องมีบัญชี active ผู้ใช้จองวันในช่วง 30 วัน และระบบยังไม่บังคับว่า slot ของวันที่เลือกต้องเริ่มในอนาคต Tip เป็นข้อมูลจำลอง ใช้ฐานข้อมูล KU_Sports ใหม่สำหรับเดโมก่อนส่งอาจารย์ เพื่อไม่ปนข้อมูลการทดสอบ และใช้ SQL Server backup/restore เพื่อสาธิต Recovery ห้ามลบ booking เพื่อ reset เพราะ trigger จะเปลี่ยนเป็น cancellation
+ไม่มี payment gateway / KU SSO / แจ้งเตือน การสมัครตรวจรูปแบบรหัส 10 หลักและสร้างบัญชีทันที แต่ไม่ยืนยันตัวตนกับทะเบียน KU รหัสคู่จองต้องมีบัญชี active ผู้ใช้จองวันในช่วง 30 วัน และระบบปฏิเสธ slot ของวันนี้ที่เริ่มไปแล้วทั้ง API และ SQL Server Tip เป็นข้อมูลจำลอง ใช้ฐานข้อมูล KU_Sports ใหม่สำหรับเดโมก่อนส่งอาจารย์ เพื่อไม่ปนข้อมูลการทดสอบ และใช้ SQL Server backup/restore เพื่อสาธิต Recovery ห้ามลบ booking เพื่อ reset เพราะ trigger จะเปลี่ยนเป็น cancellation
 
 แหล่งอ้างอิงเทคนิค: [Microsoft SqlClient](https://learn.microsoft.com/en-us/sql/connect/ado-net/get-started-sqlclient-driver), [ASP.NET minimal APIs](https://learn.microsoft.com/en-us/aspnet/core/tutorials/min-web-api), [SQL Server locking](https://learn.microsoft.com/en-us/sql/t-sql/queries/hints-transact-sql-table)
+

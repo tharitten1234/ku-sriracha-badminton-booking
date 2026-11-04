@@ -24,10 +24,17 @@ if(-not $demoPassword){
 }
 Set-Content -LiteralPath $credentialsPath -Encoding utf8 -Value "# Local demo credentials`nUsername: admin`nPassword: $demoPassword`n`nThis file is excluded from git. Do not publish it."
 $env:ConnectionStrings__SqlServer="Server=$Server;Database=KU_Sports;Integrated Security=True;Encrypt=True;TrustServerCertificate=True"
-$env:Demo__AdminPassword=$demoPassword
-$env:Demo__ResetAdminPassword='true'
+if($demoPassword.Length -ge 12){
+ $env:Demo__AdminPassword=$demoPassword
+ $env:Demo__ResetAdminPassword='true'
+}else{
+ # Short local demo passwords must already be set in SQL Server; do not reseed.
+ $env:Demo__AdminPassword=''
+ $env:Demo__ResetAdminPassword='false'
+}
 $env:ASPNETCORE_URLS="http://localhost:$Port"
 Write-Host "Website: http://localhost:$Port"
 Write-Host 'Admin credentials: docs/DemoCredentials.local.md'
 Push-Location backend
 try { & dotnet .\bin\Debug\net10.0\backend.dll } finally { Pop-Location }
+

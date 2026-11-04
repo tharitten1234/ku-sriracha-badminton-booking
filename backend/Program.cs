@@ -15,8 +15,8 @@ builder.Services.AddSingleton<Db>();
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath,".local","keys")));
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o => {
  o.Cookie.Name="ku-court-session"; o.Cookie.HttpOnly=true; o.Cookie.SameSite=SameSiteMode.Strict; o.Cookie.SecurePolicy=CookieSecurePolicy.SameAsRequest; o.ExpireTimeSpan=TimeSpan.FromHours(4);
- o.Events.OnRedirectToLogin=c=>{c.Response.StatusCode=401; return c.Response.WriteAsJsonAsync(new {message="กรุณาเข้าสู่ระบบก่อน"});};
- o.Events.OnRedirectToAccessDenied=c=>{c.Response.StatusCode=403; return c.Response.WriteAsJsonAsync(new {message="ไม่มีสิทธิ์เข้าถึง"});};
+ o.Events.OnRedirectToLogin=c=>{c.Response.StatusCode=401; return c.Response.WriteAsJsonAsync(new {message=c.Request.Headers.AcceptLanguage.ToString().StartsWith("en")?"Please sign in first":"กรุณาเข้าสู่ระบบก่อน"});};
+ o.Events.OnRedirectToAccessDenied=c=>{c.Response.StatusCode=403; return c.Response.WriteAsJsonAsync(new {message=c.Request.Headers.AcceptLanguage.ToString().StartsWith("en")?"Access denied":"ไม่มีสิทธิ์เข้าถึง"});};
 });
 builder.Services.AddAuthorization();
 builder.Services.AddRateLimiter(o=>{o.RejectionStatusCode=429;o.AddPolicy("login",c=>RateLimitPartition.GetFixedWindowLimiter(c.Connection.RemoteIpAddress?.ToString()??"local",_=>new FixedWindowRateLimiterOptions{PermitLimit=20,Window=TimeSpan.FromMinutes(1)}));});
@@ -27,14 +27,14 @@ app.Use(async(c,next)=>{
  if(c.Request.Method is "POST" or "PUT" or "DELETE") {
   var origin=c.Request.Headers.Origin.ToString();
   // Vite dev proxy and deployed single-origin app are both supported.
-  if(origin.Length>0 && (!Uri.TryCreate(origin,UriKind.Absolute,out var u)||u.Authority!=c.Request.Host.Value)) {c.Response.StatusCode=403;await c.Response.WriteAsJsonAsync(new{message="คำขอจากเว็บไซต์อื่นไม่ได้รับอนุญาต"});return;}
+  if(origin.Length>0 && (!Uri.TryCreate(origin,UriKind.Absolute,out var u)||u.Authority!=c.Request.Host.Value)) {c.Response.StatusCode=403;await c.Response.WriteAsJsonAsync(new{message=Text(c,"คำขอจากเว็บไซต์อื่นไม่ได้รับอนุญาต","Requests from other websites are not allowed")});return;}
  }
  try {await next();}
  catch(SqlException e){
   app.Logger.LogWarning("SQL error {Number}",e.Number);
-  if(!c.Response.HasStarted){c.Response.StatusCode=e.Number>=50000||e.Number==1205?409:503;var english=c.Request.Headers.AcceptLanguage.ToString().StartsWith("en",StringComparison.OrdinalIgnoreCase);var localized=e.Number switch{50001=>english?"The facility is closed on the selected date":"วันที่เลือกสนามปิดให้บริการ กรุณาตรวจสอบกิจกรรม",50002=>english?"Choose two different students":"กรุณาใช้รหัสนิสิตคนละคน",50003=>english?"A student ID is invalid or inactive":"ไม่พบรหัสนิสิตหรือรหัสนิสิตไม่มีสิทธิ์ใช้งาน",50004=>english?"The court or time is unavailable":"คอร์ดหรือช่วงเวลาปิดให้บริการ",50005=>english?"This time slot is already booked":"ช่วงเวลานี้ถูกจองแล้ว กรุณาเลือกเวลาอื่น",50006=>english?"Booking not found":"ไม่พบการจอง",50009=>english?"Choose a date within the next 30 days":"เลือกวันจองได้ตั้งแต่วันนี้ถึง 30 วันข้างหน้า",50010=>english?"An account already exists for this student ID. Please sign in.":"รหัสนี้มีบัญชีแล้ว กรุณาเข้าสู่ระบบ",_=>english?"The request could not be completed":"ทำรายการไม่สำเร็จ"};await c.Response.WriteAsJsonAsync(new{message=e.Number>=50000?localized:e.Number==1205?(english?"A booking was made at the same time. Please retry.":"มีการจองพร้อมกัน กรุณาลองอีกครั้ง"):(english?"Could not connect to the database":"เชื่อมต่อฐานข้อมูลไม่ได้ กรุณาตรวจสอบ SQL Server")});}
+  if(!c.Response.HasStarted){c.Response.StatusCode=e.Number>=50000||e.Number==1205?409:503;var english=c.Request.Headers.AcceptLanguage.ToString().StartsWith("en",StringComparison.OrdinalIgnoreCase);var localized=e.Number switch{50001=>english?"The facility is closed on the selected date":"วันที่เลือกสนามปิดให้บริการ กรุณาตรวจสอบกิจกรรม",50002=>english?"Choose two different students":"กรุณาใช้รหัสนิสิตคนละคน",50003=>english?"A student ID is invalid or inactive":"ไม่พบรหัสนิสิตหรือรหัสนิสิตไม่มีสิทธิ์ใช้งาน",50004=>english?"The court or time is unavailable":"คอร์ดหรือช่วงเวลาปิดให้บริการ",50005=>english?"This time slot is already booked":"ช่วงเวลานี้ถูกจองแล้ว กรุณาเลือกเวลาอื่น",50006=>english?"Booking not found":"ไม่พบการจอง",50009=>english?"Choose a date within the next 30 days":"เลือกวันจองได้ตั้งแต่วันนี้ถึง 30 วันข้างหน้า",50007=>english?"Amount must be greater than zero and no more than 100,000 baht":"จำนวนเงินต้องมากกว่า 0 และไม่เกิน 100,000 บาท",50008=>english?"Tips can only be added to active bookings":"เพิ่มเงินสนับสนุนได้เฉพาะการจองที่ยังไม่ยกเลิก",50011=>english?"This time slot has already started. Choose another time or date.":"ช่วงเวลานี้เริ่มไปแล้ว กรุณาเลือกเวลาหรือวันอื่น",50010=>english?"An account already exists for this student ID. Please sign in.":"รหัสนี้มีบัญชีแล้ว กรุณาเข้าสู่ระบบ",_=>english?"The request could not be completed":"ทำรายการไม่สำเร็จ"};await c.Response.WriteAsJsonAsync(new{message=e.Number>=50000?localized:e.Number==1205?(english?"A booking was made at the same time. Please retry.":"มีการจองพร้อมกัน กรุณาลองอีกครั้ง"):(english?"Could not connect to the database":"เชื่อมต่อฐานข้อมูลไม่ได้ กรุณาตรวจสอบ SQL Server")});}
  }
- catch(BadHttpRequestException){c.Response.StatusCode=400;await c.Response.WriteAsJsonAsync(new{message="ข้อมูลที่ส่งมาไม่ถูกต้อง"});}
+ catch(BadHttpRequestException){c.Response.StatusCode=400;await c.Response.WriteAsJsonAsync(new{message=Text(c,"ข้อมูลที่ส่งมาไม่ถูกต้อง","Invalid request data")});}
 });
 app.UseDefaultFiles();app.UseStaticFiles();app.UseRateLimiter();app.UseAuthentication();app.UseAuthorization();
 var db=app.Services.GetRequiredService<Db>();
@@ -50,93 +50,94 @@ app.MapGet("/api/today",async(Db d)=>Results.Ok(new{
  schedule=(await d.Query("SELECT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATE) Today,s.ScheduleID,s.IsCourtOpen,s.ActivityName,s.Description FROM (SELECT 1 n)x LEFT JOIN dbo.FACILITY_SCHEDULE s ON s.ScheduleDate=CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATE)"))[0],
  slots=await d.Query("SELECT * FROM dbo.vw_TodayCourtSchedule ORDER BY CourtID,SlotID")
 }));
-app.MapGet("/api/availability/{date}",async(string date,Db d)=>{
- if(!DateOnly.TryParseExact(date,"yyyy-MM-dd",out var selected))return Results.BadRequest(new{message="Choose a valid date"});
+app.MapGet("/api/availability/{date}",async(string date,HttpContext c,Db d)=>{
+ if(!DateOnly.TryParseExact(date,"yyyy-MM-dd",out var selected))return Results.BadRequest(new{message=Text(c,"กรุณาเลือกวันที่ให้ถูกต้อง","Choose a valid date")});
  var todayRows=await d.Query("SELECT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATE) Today");
  var today=DateOnly.FromDateTime((DateTime)todayRows[0]["today"]!);
- if(selected<today||selected>today.AddDays(30))return Results.BadRequest(new{message="Choose a date within the next 30 days"});
+ if(selected<today||selected>today.AddDays(30))return Results.BadRequest(new{message=Text(c,"เลือกวันจองได้ตั้งแต่วันนี้ถึง 30 วันข้างหน้า","Choose a date within the next 30 days")});
  var day=selected.ToDateTime(TimeOnly.MinValue);
  var schedule=await d.Query("SELECT @Date Today,s.ScheduleID,s.IsCourtOpen,s.ActivityName,s.Description FROM (SELECT 1 n)x LEFT JOIN dbo.FACILITY_SCHEDULE s ON s.ScheduleDate=@Date",new SqlParameter("@Date",day));
- var slots=await d.Query("SELECT c.CourtID,c.CourtName,c.CourtStatus,t.SlotID,CONVERT(VARCHAR(5),t.StartTime,108) StartTime,CONVERT(VARCHAR(5),t.EndTime,108) EndTime,@Date BookingDate,CASE WHEN s.ScheduleID IS NULL OR s.IsCourtOpen=0 OR NULLIF(LTRIM(RTRIM(s.ActivityName)),'') IS NOT NULL OR c.CourtStatus<>'ACTIVE' OR t.IsActive=0 THEN 'CLOSED' WHEN b.BookingID IS NOT NULL THEN 'BOOKED' ELSE 'AVAILABLE' END Availability FROM dbo.COURTS c CROSS JOIN dbo.TIME_SLOTS t LEFT JOIN dbo.FACILITY_SCHEDULE s ON s.ScheduleDate=@Date LEFT JOIN dbo.BOOKINGS b ON b.CourtID=c.CourtID AND b.SlotID=t.SlotID AND b.BookingDate=@Date AND b.Status='BOOKED'",new SqlParameter("@Date",day));
+ var slots=await d.Query("SELECT c.CourtID,c.CourtName,c.CourtStatus,t.SlotID,CONVERT(VARCHAR(5),t.StartTime,108) StartTime,CONVERT(VARCHAR(5),t.EndTime,108) EndTime,@Date BookingDate,CASE WHEN s.ScheduleID IS NULL OR s.IsCourtOpen=0 OR NULLIF(LTRIM(RTRIM(s.ActivityName)),'') IS NOT NULL OR c.CourtStatus<>'ACTIVE' OR t.IsActive=0 OR (@Date=CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATE) AND t.StartTime<=CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS TIME)) THEN 'CLOSED' WHEN b.BookingID IS NOT NULL THEN 'BOOKED' ELSE 'AVAILABLE' END Availability FROM dbo.COURTS c CROSS JOIN dbo.TIME_SLOTS t LEFT JOIN dbo.FACILITY_SCHEDULE s ON s.ScheduleDate=@Date LEFT JOIN dbo.BOOKINGS b ON b.CourtID=c.CourtID AND b.SlotID=t.SlotID AND b.BookingDate=@Date AND b.Status='BOOKED'",new SqlParameter("@Date",day));
  return Results.Ok(new{schedule=schedule[0],slots});
 });
-app.MapPost("/api/students/register",async(StudentRegistration p,Db d)=>{
- if(!StudentId.Valid(p.StudentID))return Results.BadRequest(new{message="Student ID must contain exactly 10 digits"});
- if(string.IsNullOrWhiteSpace(p.FullName)||p.FullName.Trim().Length>100)return Results.BadRequest(new{message="Enter your name (up to 100 characters)"});
- if(string.IsNullOrEmpty(p.Password)||p.Password.Length<10||p.Password.Length>128)return Results.BadRequest(new{message="Password must be 10 to 128 characters"});
+app.MapPost("/api/students/register",async(StudentRegistration p,HttpContext c,Db d)=>{
+ if(!StudentId.Valid(p.StudentID))return Results.BadRequest(new{message=Text(c,"รหัสนิสิตต้องมีตัวเลข 10 หลักพอดี","Student ID must contain exactly 10 digits")});
+ if(string.IsNullOrWhiteSpace(p.FullName)||p.FullName.Trim().Length>100)return Results.BadRequest(new{message=Text(c,"กรุณากรอกชื่อไม่เกิน 100 ตัวอักษร","Enter your name (up to 100 characters)")});
+ if(string.IsNullOrEmpty(p.Password)||p.Password.Length<10||p.Password.Length>128)return Results.BadRequest(new{message=Text(c,"รหัสผ่านต้องมี 10–128 ตัวอักษร","Password must be 10 to 128 characters")});
  // Lock the ID range so parallel registrations cannot claim the same ID.
  await d.Query("SET XACT_ABORT ON; BEGIN TRY BEGIN TRAN; IF EXISTS(SELECT 1 FROM dbo.STUDENTS WITH(UPDLOCK,HOLDLOCK) WHERE StudentID=@I AND PasswordHash IS NOT NULL) THROW 50010,N'An account already exists for this student ID. Please sign in.',1; IF EXISTS(SELECT 1 FROM dbo.STUDENTS WHERE StudentID=@I) UPDATE dbo.STUDENTS SET FullName=@N,Email=NULL,PasswordHash=@H,IsActive=1 WHERE StudentID=@I; ELSE INSERT dbo.STUDENTS(StudentID,FullName,PasswordHash,IsActive) VALUES(@I,@N,@H,1); COMMIT; END TRY BEGIN CATCH IF XACT_STATE()<>0 ROLLBACK; THROW; END CATCH",new SqlParameter("@I",p.StudentID),new SqlParameter("@N",p.FullName.Trim()),new SqlParameter("@H",Passwords.Hash(p.Password)));
- return Results.Ok(new{message="Account created. You can now sign in."});
+ return Results.Ok(new{message=Text(c,"สมัครบัญชีสำเร็จ สามารถเข้าสู่ระบบได้","Account created. You can now sign in.")});
 }).RequireRateLimiting("login");
 app.MapPost("/api/students/login",async(StudentLogin p,HttpContext c,Db d)=>{
- if(!StudentId.Valid(p.StudentID)||string.IsNullOrEmpty(p.Password)||p.Password.Length>128)return Results.BadRequest(new{message="Enter a 10-digit student ID and password"});
+ if(!StudentId.Valid(p.StudentID)||string.IsNullOrEmpty(p.Password)||p.Password.Length>128)return Results.BadRequest(new{message=Text(c,"กรุณากรอกรหัสนิสิต 10 หลักและรหัสผ่าน","Enter a 10-digit student ID and password")});
  var rows=await d.Query("SELECT StudentID,FullName,PasswordHash FROM dbo.STUDENTS WHERE StudentID=@I AND IsActive=1",new SqlParameter("@I",p.StudentID));
- if(rows.Count!=1||rows[0]["passwordHash"] is not string hash||!Passwords.Verify(p.Password,hash))return Results.Json(new{message="Student ID or password is incorrect"},statusCode:401);
+ if(rows.Count!=1||rows[0]["passwordHash"] is not string hash||!Passwords.Verify(p.Password,hash))return Results.Json(new{message=Text(c,"รหัสนิสิตหรือรหัสผ่านไม่ถูกต้อง","Student ID or password is incorrect")},statusCode:401);
  await c.SignInAsync(new ClaimsPrincipal(new ClaimsIdentity(new[]{new Claim(ClaimTypes.Name,p.StudentID),new Claim(ClaimTypes.Role,"STUDENT"),new Claim("StudentID",p.StudentID),new Claim("FullName",(string)rows[0]["fullName"]!)},CookieAuthenticationDefaults.AuthenticationScheme)));
- return Results.Ok(new{message="Signed in"});
+ return Results.Ok(new{message=Text(c,"เข้าสู่ระบบแล้ว","Signed in")});
 }).RequireRateLimiting("login");
 app.MapGet("/api/session",(HttpContext c)=>Results.Ok(new{authenticated=c.User.Identity?.IsAuthenticated??false,role=c.User.FindFirstValue(ClaimTypes.Role),studentId=c.User.FindFirstValue("StudentID"),fullName=c.User.FindFirstValue("FullName"),username=c.User.Identity?.Name}));
 app.MapPost("/api/students/partner",async(PartnerRequest p,HttpContext c,Db d)=>{
  if(!c.User.IsInRole("STUDENT"))return Results.Unauthorized();
- if(!StudentId.Valid(p.StudentID2)||p.StudentID2==c.User.FindFirstValue("StudentID"))return Results.BadRequest(new{message="Enter a different student's 10-digit ID"});
+ if(!StudentId.Valid(p.StudentID2)||p.StudentID2==c.User.FindFirstValue("StudentID"))return Results.BadRequest(new{message=Text(c,"กรุณากรอกรหัสนิสิตอีกคนจำนวน 10 หลัก","Enter a different student's 10-digit ID")});
  var rows=await d.Query("SELECT StudentID,FullName,dbo.fn_IsStudentEligible(StudentID) Eligible FROM dbo.STUDENTS WHERE StudentID=@I",new SqlParameter("@I",p.StudentID2));
- if(rows.Count!=1||!(bool)rows[0]["eligible"]!)return Results.BadRequest(new{message="The second student must register an active account first"});
+ if(rows.Count!=1||!(bool)rows[0]["eligible"]!)return Results.BadRequest(new{message=Text(c,"ผู้เล่นอีกคนต้องมีบัญชีที่เปิดใช้งานแล้ว","The second student must register an active account first")});
  return Results.Ok(rows[0]);
 }).RequireAuthorization().RequireRateLimiting("login");
 app.MapPost("/api/bookings",async(BookingRequest p,HttpContext c,Db d)=>{
  if(!c.User.IsInRole("STUDENT"))return Results.Forbid();
- if(p.CourtID<1||p.SlotID<1)return Results.BadRequest(new{message="กรุณาเลือกคอร์ดและช่วงเวลา"});
- if(p.StudentID2 is null||!StudentId.Valid(p.StudentID2))return Results.BadRequest(new{message="Enter the second student's 10-digit ID"});
+ if(p.CourtID<1||p.SlotID<1)return Results.BadRequest(new{message=Text(c,"กรุณาเลือกคอร์ดและช่วงเวลา","Choose a court and time slot")});
+ if(p.StudentID2 is null||!StudentId.Valid(p.StudentID2))return Results.BadRequest(new{message=Text(c,"กรุณากรอกรหัสนิสิตผู้เล่นอีกคนจำนวน 10 หลัก","Enter the second student's 10-digit ID")});
  return Results.Ok((await d.Procedure("sp_CreateBooking",new SqlParameter("@CourtID",p.CourtID),new SqlParameter("@SlotID",p.SlotID),new SqlParameter("@BookingDate",p.BookingDate.ToDateTime(TimeOnly.MinValue)),new SqlParameter("@StudentID1",c.User.FindFirstValue("StudentID")),new SqlParameter("@StudentID2",p.StudentID2)))[0]);
 }).RequireAuthorization();
 app.MapGet("/api/bookings",async(HttpContext c,Db d)=>Results.Ok(await d.Query(c.User.IsInRole("ADMIN")?"SELECT * FROM dbo.vw_BookingDetails ORDER BY BookingID DESC":"SELECT * FROM dbo.vw_BookingDetails WHERE StudentID1=@A OR StudentID2=@A ORDER BY BookingID DESC",new SqlParameter("@A",c.User.FindFirstValue("StudentID"))))).RequireAuthorization();
 app.MapPost("/api/bookings/{id:int}/cancel",async(int id,HttpContext c,Db d)=>{
- if(!await Owns(id,c,d))return Results.NotFound(new{message="ไม่พบการจองหรือไม่มีสิทธิ์เข้าถึง"});
+ if(!await Owns(id,c,d))return Results.NotFound(new{message=Text(c,"ไม่พบการจองหรือไม่มีสิทธิ์เข้าถึง","Booking not found or access denied")});
  return Results.Ok((await d.Procedure("sp_CancelBooking",new SqlParameter("@BookingID",id)))[0]);
 }).RequireAuthorization();
 app.MapPost("/api/bookings/{id:int}/donations",async(int id,DonationRequest p,HttpContext c,Db d)=>{
- if(p.Amount<=0||p.Amount>100000||decimal.Round(p.Amount,2)!=p.Amount)return Results.BadRequest(new{message="กรุณาระบุเงิน 0.01–100,000 บาท ทศนิยมไม่เกิน 2 ตำแหน่ง"});
- if(!await Owns(id,c,d))return Results.NotFound(new{message="ไม่พบการจองหรือไม่มีสิทธิ์เข้าถึง"});
+ if(p.Amount<=0||p.Amount>100000||decimal.Round(p.Amount,2)!=p.Amount)return Results.BadRequest(new{message=Text(c,"กรุณาระบุเงิน 0.01–100,000 บาท ทศนิยมไม่เกิน 2 ตำแหน่ง","Enter an amount from 0.01 to 100,000 baht with up to two decimal places")});
+ if(!await Owns(id,c,d))return Results.NotFound(new{message=Text(c,"ไม่พบการจองหรือไม่มีสิทธิ์เข้าถึง","Booking not found or access denied")});
  return Results.Ok((await d.Procedure("sp_AddDonation",new SqlParameter("@BookingID",id),new SqlParameter("@Amount",SqlDbType.Decimal){Precision=10,Scale=2,Value=p.Amount}))[0]);
 }).RequireAuthorization();
 app.MapPost("/api/admin/login",async(LoginRequest p,HttpContext c,Db d)=>{
- if(string.IsNullOrEmpty(p.Username)||string.IsNullOrEmpty(p.Password)||p.Password.Length>255)return Results.BadRequest(new{message="กรุณากรอกชื่อผู้ใช้และรหัสผ่าน"});
+ if(string.IsNullOrEmpty(p.Username)||string.IsNullOrEmpty(p.Password)||p.Password.Length>255)return Results.BadRequest(new{message=Text(c,"กรุณากรอกชื่อผู้ใช้และรหัสผ่าน","Enter your username and password")});
  var rows=await d.Query("SELECT StaffID,Username,PasswordHash FROM dbo.STAFF_USERS WHERE Username=@U AND IsActive=1 AND Role='ADMIN'",new SqlParameter("@U",p.Username));
- if(rows.Count!=1||!Passwords.Verify(p.Password,(string)rows[0]["passwordHash"]!))return Results.Json(new{message="ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"},statusCode:401);
+ if(rows.Count!=1||!Passwords.Verify(p.Password,(string)rows[0]["passwordHash"]!))return Results.Json(new{message=Text(c,"ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง","Username or password is incorrect")},statusCode:401);
  await c.SignInAsync(new ClaimsPrincipal(new ClaimsIdentity(new[]{new Claim(ClaimTypes.Name,(string)rows[0]["username"]!),new Claim(ClaimTypes.Role,"ADMIN")},CookieAuthenticationDefaults.AuthenticationScheme)));
- return Results.Ok(new{message="เข้าสู่ระบบแล้ว"});
+ return Results.Ok(new{message=Text(c,"เข้าสู่ระบบแล้ว","Signed in")});
 }).RequireRateLimiting("login");
-app.MapPost("/api/logout",async(HttpContext c)=>{await c.SignOutAsync();return Results.Ok(new{message="ออกจากระบบแล้ว"});});
+app.MapPost("/api/logout",async(HttpContext c)=>{await c.SignOutAsync();return Results.Ok(new{message=Text(c,"ออกจากระบบแล้ว","Signed out")});});
 var admin=app.MapGroup("/api/admin").RequireAuthorization(p=>p.RequireRole("ADMIN"));
 admin.MapGet("/schedule",async(Db d)=>Results.Ok(await d.Query("SELECT * FROM dbo.FACILITY_SCHEDULE ORDER BY ScheduleDate DESC")));
-admin.MapPut("/schedule",async(ScheduleRequest p,Db d)=>{
- if(p.ActivityName?.Length>200||p.Description?.Length>500)return Results.BadRequest(new{message="ชื่อกิจกรรมหรือรายละเอียดมีความยาวเกินกำหนด"});
- if(p.IsCourtOpen&&!string.IsNullOrWhiteSpace(p.ActivityName))return Results.BadRequest(new{message="วันที่มีกิจกรรมต้องปิดการจองสนาม"});
+admin.MapPut("/schedule",async(ScheduleRequest p,HttpContext c,Db d)=>{
+ if(p.ActivityName?.Length>200||p.Description?.Length>500)return Results.BadRequest(new{message=Text(c,"ชื่อกิจกรรมหรือรายละเอียดมีความยาวเกินกำหนด","Activity name or description is too long")});
+ if(p.IsCourtOpen&&!string.IsNullOrWhiteSpace(p.ActivityName))return Results.BadRequest(new{message=Text(c,"วันที่มีกิจกรรมต้องปิดการจองสนาม","Dates with an event must be closed for booking")});
  await d.Query("SET XACT_ABORT ON; BEGIN TRY BEGIN TRAN; UPDATE dbo.FACILITY_SCHEDULE WITH(UPDLOCK,SERIALIZABLE) SET IsCourtOpen=@O,ActivityName=@A,Description=@D WHERE ScheduleDate=@Date; IF @@ROWCOUNT=0 INSERT dbo.FACILITY_SCHEDULE(ScheduleDate,IsCourtOpen,ActivityName,Description) VALUES(@Date,@O,@A,@D); COMMIT; END TRY BEGIN CATCH IF XACT_STATE()<>0 ROLLBACK; THROW; END CATCH",new SqlParameter("@Date",p.ScheduleDate.ToDateTime(TimeOnly.MinValue)),new SqlParameter("@O",p.IsCourtOpen),new SqlParameter("@A",string.IsNullOrWhiteSpace(p.ActivityName)?null:p.ActivityName),new SqlParameter("@D",p.Description));
- return Results.Ok(new{message="บันทึกตารางเปิด–ปิดแล้ว"});
+ return Results.Ok(new{message=Text(c,"บันทึกตารางเปิด–ปิดแล้ว","Schedule saved")});
 });
-admin.MapPut("/courts/{id:int}",async(int id,CourtRequest p,Db d)=>{
- if(p.CourtStatus is not("ACTIVE" or "MAINTENANCE" or "CLOSED"))return Results.BadRequest(new{message="สถานะคอร์ดไม่ถูกต้อง"});
+admin.MapPut("/courts/{id:int}",async(int id,CourtRequest p,HttpContext c,Db d)=>{
+ if(p.CourtStatus is not("ACTIVE" or "MAINTENANCE" or "CLOSED"))return Results.BadRequest(new{message=Text(c,"สถานะคอร์ดไม่ถูกต้อง","Invalid court status")});
  var rows=await d.Query("UPDATE dbo.COURTS SET CourtStatus=@S OUTPUT inserted.CourtID WHERE CourtID=@I",new SqlParameter("@S",p.CourtStatus),new SqlParameter("@I",id));
- return rows.Count==0?Results.NotFound():Results.Ok(new{message="บันทึกสถานะคอร์ดแล้ว"});
+ return rows.Count==0?Results.NotFound():Results.Ok(new{message=Text(c,"บันทึกสถานะคอร์ดแล้ว","Court status saved")});
 });
 admin.MapGet("/logs",async(Db d)=>Results.Ok(await d.Query("SELECT TOP(200) * FROM dbo.BOOKING_LOGS ORDER BY LogID DESC")));
-admin.MapGet("/reports",async(string? from,string? to,Db d)=>{
+admin.MapGet("/reports",async(string? from,string? to,HttpContext c,Db d)=>{
  var todayRows=await d.Query("SELECT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATE) Today");
  var today=DateOnly.FromDateTime((DateTime)todayRows[0]["today"]!);
  var start=DateOnly.TryParseExact(from,"yyyy-MM-dd",out var f)?f:today.AddDays(-29);
  var end=DateOnly.TryParseExact(to,"yyyy-MM-dd",out var t)?t:today;
- if(end<start||end.DayNumber-start.DayNumber>365)return Results.BadRequest(new{message="Choose a valid report range of up to 366 days"});
+ if(end<start||end.DayNumber-start.DayNumber>365)return Results.BadRequest(new{message=Text(c,"กรุณาเลือกช่วงรายงานให้ถูกต้อง ไม่เกิน 366 วัน","Choose a valid report range of up to 366 days")});
  var p=new[]{new SqlParameter("@From",start.ToDateTime(TimeOnly.MinValue)),new SqlParameter("@To",end.ToDateTime(TimeOnly.MinValue))};
  return Results.Ok(new{
   totals=(await d.Query("SELECT COUNT(*) BookingCount,COALESCE(SUM(CASE WHEN BookingDate=CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATE) AND Status='BOOKED' THEN 1 ELSE 0 END),0) TodayBookingCount,(SELECT COALESCE(SUM(Amount),0) FROM dbo.DONATIONS) DonationTotal FROM dbo.BOOKINGS"))[0],
-  courts=await d.Query("SELECT c.CourtID,c.CourtName,COUNT(b.BookingID) BookingCount FROM dbo.COURTS c LEFT JOIN dbo.BOOKINGS b ON b.CourtID=c.CourtID AND b.Status='BOOKED' GROUP BY c.CourtID,c.CourtName ORDER BY BookingCount DESC,c.CourtID"),
-  mostUsed=await d.Query("SELECT c.CourtName,COUNT(*) BookingCount FROM dbo.COURTS c INNER JOIN dbo.BOOKINGS b ON b.CourtID=c.CourtID WHERE b.Status='BOOKED' GROUP BY c.CourtName HAVING COUNT(*)>=1 ORDER BY BookingCount DESC"),
+  courts=await d.Query("SELECT c.CourtID,c.CourtName,COUNT(b.BookingID) BookingCount FROM dbo.COURTS c LEFT JOIN dbo.BOOKINGS b ON b.CourtID=c.CourtID AND b.Status='BOOKED' AND b.BookingDate BETWEEN @From AND @To GROUP BY c.CourtID,c.CourtName ORDER BY BookingCount DESC,c.CourtID",p),
+  mostUsed=await d.Query("SELECT c.CourtName,COUNT(*) BookingCount FROM dbo.COURTS c INNER JOIN dbo.BOOKINGS b ON b.CourtID=c.CourtID WHERE b.Status='BOOKED' AND b.BookingDate BETWEEN @From AND @To GROUP BY c.CourtName HAVING COUNT(*)>=1 ORDER BY BookingCount DESC",p),
   daily=await d.Query("WITH Dates AS(SELECT @From ReportDate UNION ALL SELECT DATEADD(DAY,1,ReportDate) FROM Dates WHERE ReportDate<@To),B AS(SELECT BookingDate,COUNT(CASE WHEN Status='BOOKED' THEN 1 END) BookedCount,COUNT(CASE WHEN Status='CANCELLED' THEN 1 END) CancelledCount,COUNT(DISTINCT CASE WHEN Status='BOOKED' THEN CourtID END) CourtCount FROM dbo.BOOKINGS WHERE BookingDate BETWEEN @From AND @To GROUP BY BookingDate),D AS(SELECT DonationDay,DonationCount,TotalAmount FROM dbo.vw_DailyDonationSummary WHERE DonationDay BETWEEN @From AND @To) SELECT Dates.ReportDate,COALESCE(B.BookedCount,0) BookedCount,COALESCE(B.CancelledCount,0) CancelledCount,COALESCE(B.CourtCount,0) CourtCount,COALESCE(D.DonationCount,0) TipCount,COALESCE(D.TotalAmount,0) TipTotal FROM Dates LEFT JOIN B ON B.BookingDate=Dates.ReportDate LEFT JOIN D ON D.DonationDay=Dates.ReportDate ORDER BY Dates.ReportDate DESC OPTION(MAXRECURSION 366)",p)
  });
 });
 app.MapFallbackToFile("index.html");app.Run();
 
+static string Text(HttpContext c,string th,string en)=>c.Request.Headers.AcceptLanguage.ToString().StartsWith("en",StringComparison.OrdinalIgnoreCase)?en:th;
 static async Task<bool> Owns(int id,HttpContext c,Db d)=>(await d.Query(c.User.IsInRole("ADMIN")?"SELECT BookingID FROM dbo.BOOKINGS WHERE BookingID=@I":"SELECT BookingID FROM dbo.BOOKINGS WHERE BookingID=@I AND (StudentID1=@A OR StudentID2=@A)",new SqlParameter("@I",id),new SqlParameter("@A",c.User.FindFirstValue("StudentID")))).Count>0;
 record StudentRegistration(string StudentID,string FullName,string Password);
 record StudentLogin(string StudentID,string Password);
@@ -157,12 +158,13 @@ sealed class Db(IConfiguration config){
  private async Task<List<Dictionary<string,object?>>> Execute(string sql,CommandType type,SqlParameter[] parameters){
   await using var connection=new SqlConnection(config.GetConnectionString("SqlServer")??throw new InvalidOperationException("Configure ConnectionStrings__SqlServer"));await connection.OpenAsync();
   await using var command=new SqlCommand(sql,connection){CommandType=type,CommandTimeout=20};
-  foreach(var p in parameters){p.Value??=DBNull.Value;command.Parameters.Add(p);}
+  foreach(var p in parameters){var parameter=(SqlParameter)((ICloneable)p).Clone();parameter.Value??=DBNull.Value;command.Parameters.Add(parameter);}
   await using var reader=await command.ExecuteReaderAsync();var result=new List<Dictionary<string,object?>>();
   do{while(await reader.ReadAsync()){var row=new Dictionary<string,object?>();for(int i=0;i<reader.FieldCount;i++)row[JsonNamingPolicy.CamelCase.ConvertName(reader.GetName(i))]=reader.IsDBNull(i)?null:reader.GetValue(i);result.Add(row);}}while(await reader.NextResultAsync());
   return result;
  }
 }
+
 
 
 

@@ -73,5 +73,5 @@ try{
 }finally{
  for(const id of created)await admin(`/bookings/${id}/cancel`,'POST');
  if(previous)await admin('/admin/schedule','PUT',{scheduleDate:day,isCourtOpen:previous.isCourtOpen,activityName:previous.activityName||'',description:previous.description||''});
- else execFileSync('sqlcmd',['-S',process.env.TEST_SQL_SERVER||'localhost','-E','-C','-d','KU_Sports','-Q',`SET QUOTED_IDENTIFIER ON; DELETE dbo.FACILITY_SCHEDULE WHERE ScheduleDate='${day}' AND NOT EXISTS(SELECT 1 FROM dbo.BOOKINGS WHERE BookingDate='${day}' AND Status='BOOKED')`,'-b'],{stdio:'ignore'});
+ else execFileSync('sqlcmd',['-S',process.env.TEST_SQL_SERVER||'localhost','-E','-C','-d',process.env.TEST_SQL_DATABASE||'KU_Sports','-Q',`SET QUOTED_IDENTIFIER ON; DELETE dbo.FACILITY_SCHEDULE WHERE ScheduleDate='${day}' AND NOT EXISTS(SELECT 1 FROM dbo.BOOKINGS WHERE BookingDate='${day}' AND Status='BOOKED')`,'-b'],{stdio:'ignore'});
 }

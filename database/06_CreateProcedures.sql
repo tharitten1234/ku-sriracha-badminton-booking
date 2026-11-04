@@ -20,6 +20,8 @@ AS BEGIN
   IF NOT EXISTS(SELECT 1 FROM dbo.COURTS WITH(HOLDLOCK) WHERE CourtID=@CourtID AND CourtStatus='ACTIVE')
    OR NOT EXISTS(SELECT 1 FROM dbo.TIME_SLOTS WITH(HOLDLOCK) WHERE SlotID=@SlotID AND IsActive=1)
    THROW 50004,N'คอร์ดหรือช่วงเวลาปิดให้บริการ',1;
+  IF @BookingDate=@Today AND EXISTS(SELECT 1 FROM dbo.TIME_SLOTS WITH(HOLDLOCK) WHERE SlotID=@SlotID AND StartTime<=CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS TIME))
+   THROW 50011,N'ช่วงเวลานี้เริ่มไปแล้ว กรุณาเลือกเวลาหรือวันอื่น',1;
   -- UPDLOCK + HOLDLOCK obtains a serializable range lock on the indexed slot key.
   IF EXISTS(SELECT 1 FROM dbo.BOOKINGS WITH(UPDLOCK,HOLDLOCK,INDEX(IX_Bookings_Lookup)) WHERE CourtID=@CourtID AND BookingDate=@BookingDate AND SlotID=@SlotID AND Status='BOOKED')
    THROW 50005,N'ช่วงเวลานี้ถูกจองแล้ว กรุณาเลือกเวลาอื่น',1;

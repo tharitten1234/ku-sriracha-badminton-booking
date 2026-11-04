@@ -2,7 +2,7 @@ USE KU_Sports;
 GO
 CREATE OR ALTER VIEW dbo.vw_TodayCourtSchedule AS
 SELECT c.CourtID,c.CourtName,c.CourtStatus,t.SlotID,CONVERT(VARCHAR(5),t.StartTime,108) StartTime,CONVERT(VARCHAR(5),t.EndTime,108) EndTime,d.BookingDate,
-CASE WHEN s.ScheduleID IS NULL OR s.IsCourtOpen=0 OR NULLIF(LTRIM(RTRIM(s.ActivityName)),'') IS NOT NULL OR c.CourtStatus<>'ACTIVE' OR t.IsActive=0 THEN 'CLOSED'
+CASE WHEN s.ScheduleID IS NULL OR s.IsCourtOpen=0 OR NULLIF(LTRIM(RTRIM(s.ActivityName)),'') IS NOT NULL OR c.CourtStatus<>'ACTIVE' OR t.IsActive=0 OR t.StartTime<=CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS TIME) THEN 'CLOSED'
 WHEN b.BookingID IS NOT NULL THEN 'BOOKED' ELSE 'AVAILABLE' END Availability
 FROM dbo.COURTS c CROSS JOIN dbo.TIME_SLOTS t
 CROSS JOIN(SELECT CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time' AS DATE) BookingDate)d
